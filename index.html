@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121014">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Eye Remote</title>
+<!--
+  Phone remote for the wearable animated eye, over Web Bluetooth (Chrome on Android, or
+  desktop Chrome). Must be served over HTTPS (or localhost). The BLE service it talks to is
+  described in eye/src/phone_link.h; the UUIDs below must match eye/src/phone_link.cpp.
+-->
+<style>
+  :root {
+    --bg: #121014;
+    --surface: #1d1a21;
+    --surface-2: #28242e;
+    --line: #3a3442;
+    --text: #efeaf4;
+    --muted: #a59cb0;
+    --accent: #ff8a1f;
+    --accent-ink: #1b0f02;
+    --ok: #5fd38a;
+    --warn: #ffc857;
+    --bad: #ff6b6b;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f6f3f8;
+      --surface: #ffffff;
+      --surface-2: #eee9f2;
+      --line: #d9d1e0;
+      --text: #1d1a21;
+      --muted: #6a6174;
+      --accent: #d9650a;
+      --accent-ink: #ffffff;
+      --ok: #1f9a52;
+      --warn: #a87200;
+      --bad: #c93838;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: max(12px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+    max-width: 560px;
+    margin: 0 auto;
+    -webkit-tap-highlight-color: transparent;
+  }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  h1 { font-size: 22px; margin: 0; flex: 1; letter-spacing: 0.5px; }
+  h2 { font-size: 15px; margin: 0; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; }
+  button {
+    font: inherit; color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px;
+    touch-action: manipulation; cursor: pointer;
+  }
+  button:disabled { opacity: 0.45; cursor: default; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+  button.danger { color: var(--bad); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+  .banner { border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+  .banner.bad { border-color: var(--bad); }
+  .hidden { display: none !important; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .dot.on { background: var(--ok); }
+  .dot.busy { background: var(--warn); }
+  .status { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+  .status div { background: var(--surface-2); border-radius: 10px; padding: 8px 4px; min-width: 0; }
+  .status b { display: block; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .status span { font-size: 12px; color: var(--muted); }
+
+  .controls { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; }
+  .pad {
+    position: relative; width: min(56vw, 220px); aspect-ratio: 1; border-radius: 50%;
+    background: radial-gradient(circle, var(--surface-2) 0 60%, var(--surface) 61%);
+    border: 1px solid var(--line); touch-action: none; user-select: none; margin: 0 auto;
+  }
+  .pad::before, .pad::after { content: ""; position: absolute; background: var(--line); }
+  .pad::before { left: 50%; top: 12%; bottom: 12%; width: 1px; }
+  .pad::after { top: 50%; left: 12%; right: 12%; height: 1px; }
+  .knob {
+    position: absolute; width: 34%; aspect-ratio: 1; left: 33%; top: 33%; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 4px 14px rgba(0,0,0,0.35); z-index: 1;
+    transition: transform 0.12s ease-out; pointer-events: none;
+  }
+  .pad.active .knob { transition: none; }
+  .buttons { display: grid; gap: 8px; min-width: 112px; }
+  .buttons button { padding: 12px 10px; }
+  .buttons button.current { border-color: var(--accent); color: var(--accent); }
+  .row { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+  .row label { color: var(--muted); font-size: 14px; }
+  select, input[type="text"] {
+    font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 9px 10px; min-width: 0; flex: 1;
+  }
+
+  details.card { padding: 0; }
+  details summary { list-style: none; padding: 14px; cursor: pointer; display: flex; justify-content: space-between; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::after { content: "+"; color: var(--muted); font-size: 18px; line-height: 1; }
+  details[open] summary::after { content: "\2212"; }
+  .fields { padding: 0 14px 14px; display: grid; gap: 14px; }
+  .field .top { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; }
+  .field .val { color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .field .hint { font-size: 12px; color: var(--muted); }
+  input[type="range"] { width: 100%; accent-color: var(--accent); margin: 6px 0 0; height: 28px; }
+  .toggle { display: flex; justify-content: space-between; align-items: center; }
+  .toggle input { width: 22px; height: 22px; accent-color: var(--accent); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .note { font-size: 13px; color: var(--muted); }
+  #log { font-size: 12px; color: var(--muted); min-height: 1.4em; }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot"></span>
+  <h1>Eye Remote</h1>
+  <button class="primary" id="connect">Connect</button>
+</header>
+
+<div class="banner bad hidden" id="unsupported">
+  This browser can't use Bluetooth. Open the page in <b>Chrome on Android</b> (or desktop
+  Chrome), from an <b>https://</b> address, with Bluetooth switched on.
+</div>
+
+<div class="card">
+  <div class="status">
+    <div><b id="sMode">–</b><span>mode</span></div>
+    <div><b id="sStyle">–</b><span>style</span></div>
+    <div><b id="sPad">–</b><span>gamepad</span></div>
+    <div><b id="sBatt">–</b><span>supply</span></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="controls">
+    <div class="pad" id="pad"><div class="knob" id="knob"></div></div>
+    <div class="buttons">
+      <button data-button="0" id="bRandom">Random</button>
+      <button data-button="1" id="bGyro">Gyro</button>
+      <button data-button="2">Next style</button>
+      <button data-button="3" id="bAction">Blink</button>
+    </div>
+  </div>
+  <div class="row">
+    <label for="style">Style</label>
+    <select id="style" disabled></select>
+  </div>
+</div>
+
+<div id="settings"></div>
+
+<details class="card">
+  <summary><h2>Advanced</h2></summary>
+  <div class="fields">
+    <div class="field">
+      <div class="top"><span>Mount rotation</span></div>
+      <div class="row" style="margin-top:6px">
+        <select id="mountRot" data-key="mountRot">
+          <option value="0">0° (USB at the bottom)</option>
+          <option value="90">90° (USB on the left)</option>
+          <option value="180">180° (USB at the top)</option>
+          <option value="270">270° (USB on the right)</option>
+        </select>
+      </div>
+      <div class="hint" id="mountNote">Takes effect after a restart.</div>
+    </div>
+    <div class="field">
+      <div class="top"><span>Paired gamepad address</span></div>
+      <div class="row" style="margin-top:6px">
+        <input type="text" id="ctrlAddr" placeholder="any gamepad" autocomplete="off" spellcheck="false">
+        <button id="saveAddr">Save</button>
+      </div>
+      <div class="hint">Empty = connect to the first gamepad it finds (pairing a new one).</div>
+    </div>
+    <div class="actions">
+      <button id="restart">Restart eye</button>
+      <button class="danger" id="defaults">Reset all settings</button>
+    </div>
+  </div>
+</details>
+
+<div id="log"></div>
+
+<script>
+"use strict";
+
+// Must match eye/src/phone_link.cpp.
+const SERVICE = "c0de0001-e7e5-4a11-8e0e-5c1a10ee2026";
+const CH_SETTINGS = "c0de0002-e7e5-4a11-8e0e-5c1a10ee2026";
+const CH_STATUS = "c0de0003-e7e5-4a11-8e0e-5c1a10ee2026";
+const CH_CONTROL = "c0de0004-e7e5-4a11-8e0e-5c1a10ee2026";
+const CH_COMMAND = "c0de0005-e7e5-4a11-8e0e-5c1a10ee2026";
+
+const STICK_SEND_MS = 50;      // while the stick or a button is held
+const BUTTON_MIN_HOLD_MS = 120; // so a quick tap still reaches the eye between frames
+const WRITE_DEBOUNCE_MS = 200;  // while a slider is dragged
+const RECONNECT_MS = [1000, 2000, 4000, 8000];
+
+const secs = v => (v / 1000).toFixed(1) + " s";
+const mins = v => v >= 60000 ? (v / 60000).toFixed(v % 60000 ? 1 : 0) + " min" : Math.round(v / 1000) + " s";
+
+// The settings shown as sliders; keys are the eye's NVS keys (settings::toJson).
+const GROUPS = [
+  { title: "Display", fields: [
+    { key: "bright", label: "Brightness", min: 5, max: 255, step: 1, fmt: v => Math.round(v / 2.55) + "%" },
+  ]},
+  { title: "Random looking", fields: [
+    { key: "blinkMin", label: "Shortest gap between blinks", min: 500, max: 20000, step: 100, fmt: secs },
+    { key: "blinkMax", label: "Longest gap between blinks", min: 500, max: 30000, step: 100, fmt: secs },
+    { key: "gazeMax", label: "Longest wait between glances", min: 500, max: 15000, step: 100, fmt: secs },
+  ]},
+  { title: "Gyro (head turns)", fields: [
+    { key: "gyroGain", label: "How far it looks into a turn", min: 0, max: 0.02, step: 0.0005,
+      fmt: v => Math.round(v * 9000) + "%", hint: "Eye travel during a steady 90°/s head turn." },
+    { key: "gyroAttack", label: "Speed into a turn", min: 10, max: 500, step: 10,
+      fmt: v => v + " ms", hint: "Lower = quicker." },
+    { key: "gyroReturn", label: "Ease back to centre", min: 50, max: 3000, step: 50, fmt: v => v + " ms" },
+    { key: "gyroPitch", label: "Head tilt for a full look up/down", min: 5, max: 60, step: 1, fmt: v => v + "°" },
+  ]},
+  { title: "Controller stick", fields: [
+    { key: "stickDead", label: "Dead zone", min: 0, max: 0.5, step: 0.01, fmt: v => Math.round(v * 100) + "%" },
+    { key: "stickSmooth", label: "Smoothing", min: 10, max: 500, step: 10, fmt: v => v + " ms" },
+    { key: "stickInvY", label: "Invert up/down", type: "bool" },
+    { key: "stickIdle", label: "Back to random after", min: 10000, max: 1800000, step: 10000, fmt: mins,
+      hint: "Stick left alone this long in Controller mode." },
+  ]},
+];
+
+const $ = id => document.getElementById(id);
+const ui = {};          // key -> { input, val, field }
+let current = {};       // last settings read from the eye
+let status = {};
+let device = null;
+let ch = {};            // characteristics by name
+let reconnectTry = 0;
+let wantConnected = false;
+
+function log(msg) { $("log").textContent = msg; }
+
+// ---- GATT queue: Web Bluetooth allows one operation at a time. ----
+let queue = Promise.resolve();
+function gatt(fn) {
+  const p = queue.then(fn);
+  queue = p.catch(() => {});
+  return p;
+}
+
+// ---- Settings UI ----
+function buildSettings() {
+  const root = $("settings");
+  for (const g of GROUPS) {
+    const det = document.createElement("details");
+    det.className = "card";
+    det.innerHTML = `<summary><h2>${g.title}</h2></summary><div class="fields"></div>`;
+    const box = det.querySelector(".fields");
+    for (const f of g.fields) {
+      const el = document.createElement("div");
+      el.className = "field";
+      if (f.type === "bool") {
+        el.innerHTML = `<label class="toggle"><span>${f.label}</span><input type="checkbox"></label>`;
+        const input = el.querySelector("input");
+        input.addEventListener("change", () => writeSettings({ [f.key]: input.checked }));
+        ui[f.key] = { input, field: f };
+      } else {
+        el.innerHTML = `<div class="top"><span>${f.label}</span><span class="val">–</span></div>
+          <input type="range" min="${f.min}" max="${f.max}" step="${f.step}">
+          ${f.hint ? `<div class="hint">${f.hint}</div>` : ""}`;
+        const input = el.querySelector("input");
+        const val = el.querySelector(".val");
+        let timer = 0;
+        const send = () => writeSettings({ [f.key]: Number(input.value) });
+        input.addEventListener("input", () => {
+          val.textContent = f.fmt(Number(input.value));
+          clearTimeout(timer);
+          timer = setTimeout(send, WRITE_DEBOUNCE_MS);
+        });
+        input.addEventListener("change", () => { clearTimeout(timer); send(); });
+        ui[f.key] = { input, val, field: f };
+      }
+      box.appendChild(el);
+    }
+    root.appendChild(det);
+  }
+  setEnabled(false);
+}
+
+function showSettings(s) {
+  current = s;
+  for (const [key, u] of Object.entries(ui)) {
+    if (!(key in s) || document.activeElement === u.input) continue;  // don't fight a drag
+    if (u.field.type === "bool") u.input.checked = !!s[key];
+    else { u.input.value = s[key]; u.val.textContent = u.field.fmt(s[key]); }
+  }
+  if ("mountRot" in s) $("mountRot").value = String(s.mountRot);
+  if ("ctrlAddr" in s && document.activeElement !== $("ctrlAddr")) $("ctrlAddr").value = s.ctrlAddr;
+  if ("style" in s) $("style").value = String(s.style);
+  mountNote();
+}
+
+function mountNote() {
+  $("mountNote").textContent = Number($("mountRot").value) === bootRotation || bootRotation === null
+    ? "Takes effect after a restart." : "Changed: restart the eye to apply it.";
+}
+let bootRotation = null;
+
+function showStatus(st) {
+  status = st;
+  $("sMode").textContent = st.mode ?? "–";
+  const names = st.styles || [];
+  $("sStyle").textContent = names[st.style] ?? "–";
+  $("sPad").textContent = st.pad ? "on" : "off";
+  $("sBatt").textContent = st.batt ? st.batt.toFixed(2) + " V" : "–";
+  const sel = $("style");
+  if (sel.options.length !== names.length) {
+    sel.innerHTML = names.map((n, i) => `<option value="${i}">${n}</option>`).join("");
+  }
+  sel.value = String(st.style);
+  $("bRandom").classList.toggle("current", st.mode === "random");
+  $("bGyro").classList.toggle("current", st.mode === "gyro");
+  $("bAction").textContent = st.mode === "gyro" ? "Recentre" : "Blink";
+}
+
+function setEnabled(on) {
+  for (const u of Object.values(ui)) u.input.disabled = !on;
+  for (const id of ["style", "mountRot", "ctrlAddr", "saveAddr", "restart", "defaults"]) $(id).disabled = !on;
+  document.querySelectorAll("[data-button]").forEach(b => b.disabled = !on);
+}
+
+// ---- Writes ----
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+
+async function writeSettings(obj) {
+  if (!ch.settings) return;
+  try {
+    await gatt(() => ch.settings.writeValueWithResponse(enc.encode(JSON.stringify(obj))));
+  } catch (e) { log("Write failed: " + e.message); }
+}
+
+async function command(text) {
+  if (!ch.command) return;
+  try { await gatt(() => ch.command.writeValueWithResponse(enc.encode(text))); }
+  catch (e) { log("Command failed: " + e.message); }
+}
+
+async function readJson(c) {
+  const v = await gatt(() => c.readValue());
+  return JSON.parse(dec.decode(v));
+}
+
+// ---- Stick and buttons ----
+const stick = { x: 0, y: 0 };
+let buttonBits = 0;
+const pressTimes = {};
+let sendBusy = false;
+let lastSent = "";
+
+function packet() {
+  const b = new Uint8Array(4);
+  b[0] = Math.round(stick.x * 127) & 0xff;
+  b[1] = Math.round(stick.y * 127) & 0xff;
+  b[2] = buttonBits & 0xff;
+  b[3] = (buttonBits >> 8) & 0xff;
+  return b;
+}
+
+// Sends while something is held (the eye drops a stick it hasn't heard from in 1 s), plus
+// once more when it all lets go.
+function sendControl(force) {
+  if (!ch.control || sendBusy) return;
+  const p = packet();
+  const key = p.join(",");
+  const idle = key === "0,0,0,0";
+  if (!force && idle && lastSent === key) return;
+  sendBusy = true;
+  lastSent = key;
+  gatt(() => ch.control.writeValueWithoutResponse(p))
+    .catch(e => log("Stick: " + e.message))
+    .finally(() => { sendBusy = false; });
+}
+setInterval(() => sendControl(false), STICK_SEND_MS);
+
+function setupPad() {
+  const pad = $("pad"), knob = $("knob");
+  let pointer = null;
+  const move = e => {
+    const r = pad.getBoundingClientRect();
+    const half = r.width / 2;
+    let x = (e.clientX - r.left - half) / half;
+    let y = -(e.clientY - r.top - half) / half;
+    const d = Math.hypot(x, y);
+    if (d > 1) { x /= d; y /= d; }
+    stick.x = x; stick.y = y;
+    knob.style.transform = `translate(${x * half * 0.66}px, ${-y * half * 0.66}px)`;
+  };
+  pad.addEventListener("pointerdown", e => {
+    if (!ch.control) return;
+    pointer = e.pointerId;
+    pad.setPointerCapture(pointer);
+    pad.classList.add("active");
+    move(e);
+    sendControl(true);
+  });
+  pad.addEventListener("pointermove", e => { if (e.pointerId === pointer) move(e); });
+  const end = e => {
+    if (e.pointerId !== pointer) return;
+    pointer = null;
+    pad.classList.remove("active");
+    stick.x = stick.y = 0;
+    knob.style.transform = "";
+    sendControl(true);
+  };
+  pad.addEventListener("pointerup", end);
+  pad.addEventListener("pointercancel", end);
+}
+
+function setupButtons() {
+  document.querySelectorAll("[data-button]").forEach(btn => {
+    const bit = 1 << Number(btn.dataset.button);
+    btn.addEventListener("pointerdown", e => {
+      e.preventDefault();
+      buttonBits |= bit;
+      pressTimes[bit] = performance.now();
+      sendControl(true);
+    });
+    const up = () => {
+      if (!(buttonBits & bit)) return;
+      const wait = Math.max(0, BUTTON_MIN_HOLD_MS - (performance.now() - pressTimes[bit]));
+      setTimeout(() => { buttonBits &= ~bit; sendControl(true); }, wait);
+    };
+    btn.addEventListener("pointerup", up);
+    btn.addEventListener("pointerleave", up);
+    btn.addEventListener("pointercancel", up);
+  });
+}
+
+// ---- Connection ----
+function setDot(state) {
+  $("dot").className = "dot" + (state === "on" ? " on" : state === "busy" ? " busy" : "");
+  $("connect").textContent = state === "on" ? "Disconnect" : state === "busy" ? "Connecting…" : "Connect";
+  $("connect").disabled = state === "busy";
+}
+
+async function connect() {
+  if (!device) {
+    device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE] }] });
+    device.addEventListener("gattserverdisconnected", onDisconnected);
+  }
+  wantConnected = true;
+  setDot("busy");
+  log("Connecting to " + (device.name || "eye") + "…");
+  const server = await device.gatt.connect();
+  const svc = await server.getPrimaryService(SERVICE);
+  ch.settings = await svc.getCharacteristic(CH_SETTINGS);
+  ch.status = await svc.getCharacteristic(CH_STATUS);
+  ch.control = await svc.getCharacteristic(CH_CONTROL);
+  ch.command = await svc.getCharacteristic(CH_COMMAND);
+
+  // A notification only says "changed": read the whole value, which can be longer.
+  ch.settings.addEventListener("characteristicvaluechanged", () => readJson(ch.settings).then(showSettings).catch(() => {}));
+  ch.status.addEventListener("characteristicvaluechanged", () => readJson(ch.status).then(showStatus).catch(() => {}));
+  await gatt(() => ch.settings.startNotifications());
+  await gatt(() => ch.status.startNotifications());
+  showStatus(await readJson(ch.status));
+  const s = await readJson(ch.settings);
+  bootRotation = s.mountRot;
+  showSettings(s);
+
+  reconnectTry = 0;
+  setEnabled(true);
+  setDot("on");
+  log("Connected.");
+}
+
+function onDisconnected() {
+  ch = {};
+  setEnabled(false);
+  setDot("off");
+  stick.x = stick.y = 0; buttonBits = 0; lastSent = "";
+  if (!wantConnected) { log("Disconnected."); return; }
+  const wait = RECONNECT_MS[Math.min(reconnectTry++, RECONNECT_MS.length - 1)];
+  log(`Lost the eye; trying again in ${wait / 1000} s…`);
+  setTimeout(() => { if (wantConnected) connect().catch(onConnectError); }, wait);
+}
+
+function onConnectError(e) {
+  if (e.name === "NotFoundError") { setDot("off"); log("No eye chosen."); return; }
+  log("Connect failed: " + e.message);
+  if (device && device.gatt.connected) device.gatt.disconnect();
+  else onDisconnected();
+}
+
+$("connect").addEventListener("click", () => {
+  if (device && device.gatt.connected) {
+    wantConnected = false;
+    device.gatt.disconnect();
+  } else {
+    connect().catch(onConnectError);
+  }
+});
+
+$("style").addEventListener("change", e => writeSettings({ style: Number(e.target.value) }));
+$("mountRot").addEventListener("change", e => { writeSettings({ mountRot: Number(e.target.value) }); mountNote(); });
+$("saveAddr").addEventListener("click", () => writeSettings({ ctrlAddr: $("ctrlAddr").value.trim().toLowerCase() }));
+$("restart").addEventListener("click", () => {
+  if (confirm("Restart the eye? It reconnects by itself.")) { bootRotation = null; command("restart"); }
+});
+$("defaults").addEventListener("click", () => {
+  if (confirm("Put every setting back to its default?")) command("defaults");
+});
+
+buildSettings();
+setupPad();
+setupButtons();
+// Offline support once installed (sw.js); needs https or localhost.
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+if (!navigator.bluetooth) {
+  $("unsupported").classList.remove("hidden");
+  $("connect").disabled = true;
+}
+</script>
+</body>
+</html>
