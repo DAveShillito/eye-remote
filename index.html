@@ -212,6 +212,8 @@ const mins = v => v >= 60000 ? (v / 60000).toFixed(v % 60000 ? 1 : 0) + " min" :
 const GROUPS = [
   { title: "Display", fields: [
     { key: "bright", label: "Brightness", min: 5, max: 255, step: 1, fmt: v => Math.round(v / 2.55) + "%" },
+    { key: "fizzLids", label: "Fizzgig eyelids on every eye", type: "bool",
+      hint: "Each style keeps its own iris and colours." },
   ]},
   { title: "Random looking", fields: [
     { key: "blinkMin", label: "Shortest gap between blinks", min: 500, max: 20000, step: 100, fmt: secs },
@@ -266,7 +268,8 @@ function buildSettings() {
       const el = document.createElement("div");
       el.className = "field";
       if (f.type === "bool") {
-        el.innerHTML = `<label class="toggle"><span>${f.label}</span><input type="checkbox"></label>`;
+        el.innerHTML = `<label class="toggle"><span>${f.label}</span><input type="checkbox"></label>
+          ${f.hint ? `<div class="hint">${f.hint}</div>` : ""}`;
         const input = el.querySelector("input");
         input.addEventListener("change", () => writeSettings({ [f.key]: input.checked }));
         ui[f.key] = { input, field: f };
@@ -355,6 +358,16 @@ async function command(text) {
 async function readJson(c) {
   const v = await gatt(() => c.readValue());
   return JSON.parse(dec.decode(v));
+}
+
+// A notification holds as much of the value as fits in one packet. Use it when it's the
+// whole JSON; read the value only when it was cut short. (Reading every time queued the
+// stick behind a slow multi-packet read each second: the eye lagged about 1 s.)
+function onNotify(e, show) {
+  let obj;
+  try { obj = JSON.parse(dec.decode(e.target.value)); }
+  catch { readJson(e.target).then(show).catch(() => {}); return; }
+  show(obj);
 }
 
 // ---- Stick and buttons ----
@@ -465,9 +478,8 @@ async function connect() {
   ch.control = await svc.getCharacteristic(CH_CONTROL);
   ch.command = await svc.getCharacteristic(CH_COMMAND);
 
-  // A notification only says "changed": read the whole value, which can be longer.
-  ch.settings.addEventListener("characteristicvaluechanged", () => readJson(ch.settings).then(showSettings).catch(() => {}));
-  ch.status.addEventListener("characteristicvaluechanged", () => readJson(ch.status).then(showStatus).catch(() => {}));
+  ch.settings.addEventListener("characteristicvaluechanged", e => onNotify(e, showSettings));
+  ch.status.addEventListener("characteristicvaluechanged", e => onNotify(e, showStatus));
   await gatt(() => ch.settings.startNotifications());
   await gatt(() => ch.status.startNotifications());
   showStatus(await readJson(ch.status));
