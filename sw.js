@@ -2,7 +2,7 @@
 // signal (it talks to the eye over Bluetooth, which needs no internet). Serves the cached
 // copy straight away and fetches a fresh one in the background when online, so an update
 // shows on the next launch. Bump VERSION to force a clean cache.
-const VERSION = "eye-remote-3";
+const VERSION = "eye-remote-4";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {
