@@ -212,8 +212,8 @@ const mins = v => v >= 60000 ? (v / 60000).toFixed(v % 60000 ? 1 : 0) + " min" :
 const GROUPS = [
   { title: "Display", fields: [
     { key: "bright", label: "Brightness", min: 5, max: 255, step: 1, fmt: v => Math.round(v / 2.55) + "%" },
-    { key: "fizzLids", label: "Fizzgig eyelids on every eye", type: "bool",
-      hint: "Each style keeps its own iris and colours." },
+    { key: "openLids", label: "Wide-open eyelids", type: "bool",
+      hint: "Eyelids stay out of the way and only show when it blinks, like Fizzgig's." },
   ]},
   { title: "Random looking", fields: [
     { key: "blinkMin", label: "Shortest gap between blinks", min: 500, max: 20000, step: 100, fmt: secs },
