@@ -214,8 +214,9 @@ const GROUPS = [
     { key: "bright", label: "Brightness", min: 5, max: 255, step: 1, fmt: v => Math.round(v / 2.55) + "%" },
     { key: "openLids", label: "Wide-open eyelids", type: "bool",
       hint: "Eyelids stay out of the way and only show when it blinks, like Fizzgig's." },
-    { key: "irisScale", label: "Iris size", min: 0.5, max: 1.2, step: 0.01, onRelease: true,
-      fmt: v => Math.round(v * 100) + "%", hint: "Of each style's own. The eye pauses briefly to redraw." },
+    { key: "iris", perStyle: true, label: "Iris size (this style)", min: 50, max: 120, step: 1,
+      onRelease: true, fmt: v => v + "%",
+      hint: "Of the style's own; each style keeps its own. The eye pauses briefly to redraw." },
   ]},
   { title: "Random looking", fields: [
     { key: "blinkMin", label: "Shortest gap between blinks", min: 500, max: 20000, step: 100, fmt: secs },
@@ -282,7 +283,7 @@ function buildSettings() {
         const input = el.querySelector("input");
         const val = el.querySelector(".val");
         let timer = 0;
-        const send = () => writeSettings({ [f.key]: Number(input.value) });
+        const send = () => writeSettings({ [fieldKey(f, current)]: Number(input.value) });
         input.addEventListener("input", () => {
           val.textContent = f.fmt(Number(input.value));
           clearTimeout(timer);
@@ -298,10 +299,16 @@ function buildSettings() {
   setEnabled(false);
 }
 
+// A perStyle field is one setting per style ("iris0", "iris1", ...): the current style's.
+function fieldKey(f, s) { return f.perStyle ? f.key + (s.style ?? 0) : f.key; }
+
 function showSettings(s) {
+  const styleChanged = s.style !== current.style;
   current = s;
-  for (const [key, u] of Object.entries(ui)) {
-    if (!(key in s) || document.activeElement === u.input) continue;  // don't fight a drag
+  for (const u of Object.values(ui)) {
+    const key = fieldKey(u.field, s);
+    const focused = document.activeElement === u.input && !(u.field.perStyle && styleChanged);
+    if (!(key in s) || focused) continue;  // don't fight a drag
     if (u.field.type === "bool") u.input.checked = !!s[key];
     else { u.input.value = s[key]; u.val.textContent = u.field.fmt(s[key]); }
   }
