@@ -37,7 +37,8 @@ Chrome asks for the "Nearby devices" permission the first time; allow it.
 
 Upload the changed files to the repo. The installed app picks up the new version the next
 time it's opened with a signal (the launch after that shows it). If an update doesn't
-appear, bump `VERSION` in `sw.js` and upload that too.
+appear, bump `VERSION` in `sw.js` and upload that too. The version shows next to the title
+("v7"); bump `PAGE_VERSION` in `index.html` along with `VERSION`.
 
 ## Local test on the PC
 

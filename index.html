@@ -56,6 +56,7 @@
   }
   header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
   h1 { font-size: 22px; margin: 0; flex: 1; letter-spacing: 0.5px; }
+  h1 .ver { font-size: 12px; font-weight: 400; color: var(--muted); letter-spacing: 0; }
   h2 { font-size: 15px; margin: 0; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; }
   button {
     font: inherit; color: var(--text); background: var(--surface-2);
@@ -122,7 +123,7 @@
 <body>
 <header>
   <span class="dot" id="dot"></span>
-  <h1>Eye Remote</h1>
+  <h1>Eye Remote <span class="ver" id="ver"></span></h1>
   <button class="primary" id="connect">Connect</button>
 </header>
 
@@ -193,6 +194,10 @@
 <script>
 "use strict";
 
+// Shown next to the title, so it's easy to see whether the installed app has updated.
+// Keep it the same as VERSION in sw.js (bump both on every change).
+const PAGE_VERSION = "eye-remote-7";
+
 // Must match eye/src/phone_link.cpp.
 const SERVICE = "c0de0001-e7e5-4a11-8e0e-5c1a10ee2026";
 const CH_SETTINGS = "c0de0002-e7e5-4a11-8e0e-5c1a10ee2026";
@@ -243,6 +248,7 @@ const GROUPS = [
 ];
 
 const $ = id => document.getElementById(id);
+$("ver").textContent = PAGE_VERSION.replace("eye-remote-", "v");
 const ui = {};          // key -> { input, val, field }
 let current = {};       // last settings read from the eye
 let status = {};
