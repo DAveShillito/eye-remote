@@ -212,6 +212,8 @@ const mins = v => v >= 60000 ? (v / 60000).toFixed(v % 60000 ? 1 : 0) + " min" :
 const GROUPS = [
   { title: "Display", fields: [
     { key: "bright", label: "Brightness", min: 5, max: 255, step: 1, fmt: v => Math.round(v / 2.55) + "%" },
+    { key: "tilt", label: "Eye rotation", min: -45, max: 45, step: 1, fmt: v => (v > 0 ? "+" : "") + v + "°",
+      hint: "Turns the eye so it sits level as worn. + lifts the side on your right." },
     { key: "openLids", label: "Wide-open eyelids", type: "bool",
       hint: "Eyelids stay out of the way and only show when it blinks, like Fizzgig's." },
     { key: "iris", perStyle: true, label: "Iris size (this style)", min: 50, max: 120, step: 1,
