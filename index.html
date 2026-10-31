@@ -118,14 +118,84 @@
   .actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .note { font-size: 13px; color: var(--muted); }
   #log { font-size: 12px; color: var(--muted); min-height: 1.4em; }
+
+  /* Help page (#help): the gamepad cheat sheet, shown instead of the remote. */
+  body.help > :not(header):not(#help) { display: none !important; }
+  body:not(.help) #help { display: none; }
+  #help h3 { font-size: 17px; margin: 0 0 8px; color: var(--accent); }
+  #help p { margin: 0; }
+  #help .card { display: grid; gap: 8px; }
+  #help .card.rule { border-color: var(--accent); }
+  #help dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 9px 14px; align-items: baseline; }
+  #help dt { font-weight: 700; white-space: nowrap; }
+  #help dd { margin: 0; min-width: 0; }
+  #help ol { margin: 0; padding-left: 1.3em; display: grid; gap: 10px; }
+  #help ol li::marker { font-weight: 700; color: var(--accent); }
+  #help .q { font-weight: 700; display: block; }
+  .key { display: inline-grid; place-items: center; width: 1.6em; height: 1.6em; border: 2px solid var(--text); border-radius: 50%; font-size: 0.85em; line-height: 1; margin-right: 6px; }
+  .led { display: inline-block; width: 0.75em; height: 0.75em; border-radius: 50%; background: #4ea3ff; margin-right: 6px; }
+  .led.blink { animation: blink 1s steps(2, start) infinite; }
+  .led.off { background: transparent; border: 2px solid var(--muted); }
+  @keyframes blink { to { visibility: hidden; } }
+  @media (prefers-reduced-motion: reduce) { .led.blink { animation: none; opacity: 0.6; } }
 </style>
 </head>
 <body>
 <header>
   <span class="dot" id="dot"></span>
   <h1>Eye Remote <span class="ver" id="ver"></span></h1>
+  <button id="helpBtn" aria-label="Gamepad help">?</button>
   <button class="primary" id="connect">Connect</button>
 </header>
+
+<div id="help">
+  <div class="card rule">
+    <h3>The one rule</h3>
+    <p>Only <b>one eye</b> switched on near the gamepad. It remembers just one eye at a time,
+      and pairing it with the other one makes it refuse this one. Slide switch on the side
+      pushed <b>forward</b>.</p>
+  </div>
+  <div class="card">
+    <h3>Power and light</h3>
+    <dl>
+      <dt>On</dt><dd>Hold <b>Start</b> about 2 s</dd>
+      <dt>Off</dt><dd>Hold <b>Start</b> about 5 s</dd>
+      <dt><span class="led blink"></span>Flashing</dt><dd>Not connected: looking for its eye</dd>
+      <dt><span class="led off"></span>Off</dt><dd>Connected, ready</dd>
+    </dl>
+    <p class="note">It switches itself off after 5 min without a connection, or 10 min connected
+      but unused. Hold Start to wake it.</p>
+  </div>
+  <div class="card">
+    <h3>Controls</h3>
+    <dl>
+      <dt>Stick</dt><dd>Steer the eye (Controller mode). Untouched for 3 min, it goes back to Random.</dd>
+      <dt><span class="key">△</span>Triangle</dt><dd>Random: looks around on its own</dd>
+      <dt><span class="key">□</span>Square</dt><dd>Gyro: follows your head turns</dd>
+      <dt><span class="key">○</span>Circle</dt><dd>Next eye style</dd>
+      <dt><span class="key">✕</span>X</dt><dd>Gyro: recentre (hold your head level first). Otherwise: blink.</dd>
+    </dl>
+    <p class="note">No gamepad needed to recentre Gyro: nod twice quickly (down-up, down-up).
+      The eye blinks once to confirm.</p>
+  </div>
+  <div class="card">
+    <h3>If it isn't working</h3>
+    <ol>
+      <li><span class="q">Light flashing, never stops</span>Check the eye is powered. Give it 10 s.
+        Then switch the gamepad off and on.</li>
+      <li><span class="q">Still flashing: re-pair it</span>Switch the gamepad off. Hold <b>Start for
+        more than 8 s</b> until the blue light flashes. Let go and wait about 10 s: the eye pairs
+        with it by itself.</li>
+      <li><span class="q">Light off, but the stick does nothing</span>Wrong mode. Check the slide
+        switch is forward. Switch off, then switch on holding <b>Start + Circle</b> together
+        (game mode).</li>
+      <li><span class="q">None of that worked</span>Use this app: Connect, pick <b>Eye1</b>. It has
+        the same stick and buttons. Gyro mode needs no controller at all.</li>
+      <li><span class="q">Eye frozen or acting oddly</span>Unplug the power bank cable and plug it
+        back in. The eye starts in Random mode with your settings.</li>
+    </ol>
+  </div>
+</div>
 
 <div class="banner bad hidden" id="unsupported">
   This browser can't use Bluetooth. Open the page in <b>Chrome on Android</b> (or desktop
@@ -196,7 +266,7 @@
 
 // Shown next to the title, so it's easy to see whether the installed app has updated.
 // Keep it the same as VERSION in sw.js (bump both on every change).
-const PAGE_VERSION = "eye-remote-7";
+const PAGE_VERSION = "eye-remote-8";
 
 // Must match eye/src/phone_link.cpp.
 const SERVICE = "c0de0001-e7e5-4a11-8e0e-5c1a10ee2026";
@@ -546,6 +616,19 @@ $("restart").addEventListener("click", () => {
 $("defaults").addEventListener("click", () => {
   if (confirm("Put every setting back to its default?")) command("defaults");
 });
+
+// Help page: on #help, so the phone's back gesture returns to the remote.
+function showHelp() {
+  const on = location.hash === "#help";
+  document.body.classList.toggle("help", on);
+  $("helpBtn").textContent = on ? "Back" : "?";
+  window.scrollTo(0, 0);
+}
+$("helpBtn").addEventListener("click", () => {
+  if (location.hash === "#help") history.back(); else location.hash = "help";
+});
+window.addEventListener("hashchange", showHelp);
+if (location.hash === "#help") history.replaceState(null, "", location.pathname);  // start on the remote
 
 buildSettings();
 setupPad();

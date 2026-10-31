@@ -3,7 +3,7 @@
 // copy straight away and fetches a fresh one in the background when online, so an update
 // shows on the next launch. Bump VERSION to force a clean cache, and PAGE_VERSION in
 // index.html with it (the page shows that one).
-const VERSION = "eye-remote-7";
+const VERSION = "eye-remote-8";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {
